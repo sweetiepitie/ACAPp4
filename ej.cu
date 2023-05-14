@@ -7,8 +7,8 @@
 #define IMDEP 256
 #define SIZE (100 * 1024 * 1024) // 100 MB
 
-#define NBLOCKS 32
-#define THREADS_PER_BLOCK 1024
+#define NBLOCKS 128
+#define THREADS_PER_BLOCK 459
 
 const int numRuns = 10;
 
