@@ -5,10 +5,10 @@
 #include <time.h>
 
 #define IMDEP 256
-#define SIZE (100*1024*1024) // 100 MB
+#define SIZE (100 * 1024 * 1024) // 100 MB
 
 #define NBLOCKS 32
-#define THREADS_PER_BLOCK 100
+#define THREADS_PER_BLOCK 1024
 
 const int numRuns = 10;
 
@@ -66,7 +66,7 @@ int compararHistogramas(unsigned int* histA, unsigned int* histB){
 __global__ void kernelHistograma(unsigned char *imagen, unsigned long size, unsigned int* histo){
        
         __shared__ unsigned int temp[IMDEP];
-        temp[threadIdx.x] = 0;
+        temp[threadIdx.x%IMDEP] = 0;
         __syncthreads();
 
         unsigned long i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -79,24 +79,28 @@ __global__ void kernelHistograma(unsigned char *imagen, unsigned long size, unsi
         
         __syncthreads();
         
-        int div = IMDEP / THREADS_PER_BLOCK,
-            remainder = IMDEP % THREADS_PER_BLOCK,
-            send_id;
-        
-        int num_sends = (threadIdx.x < remainder) ? div + 1 : div;
-        
-        for (int i = 0; i < num_sends; i++){
-                send_id = (!remainder) ? i + threadIdx.x*div : 
-                          (threadIdx.x < remainder ? i + div*threadIdx.x + threadIdx.x 
-                                : i + div*threadIdx.x + remainder);
+        if (threadIdx.x < IMDEP){
+                int thr_per_block = (THREADS_PER_BLOCK > IMDEP) ? IMDEP : THREADS_PER_BLOCK;
+                int div = IMDEP / thr_per_block,
+                remainder = IMDEP % thr_per_block,
+                send_id;
+                int num_sends = (threadIdx.x < remainder) ? div + 1 : div;
                 
-                atomicAdd( &(histo[send_id]), temp[send_id] );
+                for (int i = 0; i < num_sends; i++){
+                        send_id = (!remainder) ? i + threadIdx.x*div : 
+                                (threadIdx.x < remainder ? i + div*threadIdx.x + threadIdx.x 
+                                        : i + div*threadIdx.x + remainder);
+                        
+                        atomicAdd( &(histo[send_id]), temp[send_id] );
+                }
         }
+        
 }
 
 int main(void){
-        if (THREADS_PER_BLOCK > IMDEP){
-                printf("\nNo sense in using BLOCK_SIZE greater than IMDEP (%d)\n\n", IMDEP);
+
+        if (THREADS_PER_BLOCK > SIZE){
+                printf("\nThere is no sense in using more THREADS_PER_BLOCK (requested : %d) than SIZE (%d)\n\n", THREADS_PER_BLOCK, SIZE);
                 exit (-1);
         }
         
